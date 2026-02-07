@@ -74,7 +74,7 @@ const Home = () => {
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                         />
-                        <Search className="w-6 h-6 text-slate-500 absolute left-5 top-4.5 group-focus-within:text-blue-400 transition-colors" />
+
                     </div>
                 </motion.div>
 

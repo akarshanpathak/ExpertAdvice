@@ -1,51 +1,68 @@
 const express = require('express');
+const router = express.Router();
 const Experience = require('../models/Experience');
 const Company = require('../models/Company');
-const authMiddleware = require('../middleware/authMiddleware');
-const router = express.Router();
+const auth = require('../middleware/authMiddleware');
 
-// Add Experience (Protected)
-router.post('/', authMiddleware, async (req, res) => {
+// Get all experiences or filter by company
+router.get('/', async (req, res) => {
     try {
-        const { companyId, roundType, description, result } = req.body;
+        const { companyId } = req.query;
+        let query = {};
+        if (companyId) query.company = companyId;
 
-        // Check if company exists
+        const experiences = await Experience.find(query)
+            .populate('company', 'name')
+            .populate('user', 'name role') // Populate user details if needed
+            .sort({ createdAt: -1 });
+
+        res.json(experiences);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// Add a new experience (Multi-Stage)
+router.post('/', auth, async (req, res) => {
+    const { companyId, role, stages, overallResult } = req.body;
+
+    try {
+        // Verify company exists
         const company = await Company.findById(companyId);
         if (!company) {
             return res.status(404).json({ message: 'Company not found' });
         }
 
-        const experience = new Experience({
-            company: company._id,
+        const newExperience = new Experience({
+            company: companyId,
             user: req.user.id,
-            roundType,
-            description,
-            result
+            role,
+            stages,
+            overallResult
         });
 
-        await experience.save();
-        res.json(experience);
+        const savedExperience = await newExperience.save();
+        res.status(201).json(savedExperience);
     } catch (err) {
-        console.error(err);
-        res.status(500).json({ message: 'Server Error' });
+        res.status(400).json({ message: err.message });
     }
 });
 
-// Delete Experience (Protected)
-router.delete('/:id', authMiddleware, async (req, res) => {
+// Delete an experience
+router.delete('/:id', auth, async (req, res) => {
     try {
         const experience = await Experience.findById(req.params.id);
         if (!experience) return res.status(404).json({ message: 'Experience not found' });
 
-        // Check ownership
-        if (experience.user.toString() !== req.user.id) {
-            return res.status(401).json({ message: 'Not authorized' });
+        // Check if user owns the experience or is admin
+        if (experience.user.toString() !== req.user.id && req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Not authorized' });
         }
 
         await experience.deleteOne();
         res.json({ message: 'Experience removed' });
     } catch (err) {
-        res.status(500).json({ message: 'Server Error' });
+        res.status(500).json({ message: err.message });
     }
 });
 
